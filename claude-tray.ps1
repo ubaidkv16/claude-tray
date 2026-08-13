@@ -55,12 +55,15 @@ $hud.TopMost = $true
 $hud.ShowInTaskbar = $false
 $hud.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
 $hud.ForeColor = [System.Drawing.Color]::Gainsboro
-$hud.Size = New-Object System.Drawing.Size 260, 92
 $hud.StartPosition = 'Manual'
 $hud.Opacity = 0.9
+# Grow to fit the text instead of a fixed size, so nothing gets clipped when the
+# numbers get longer (1.2M vs 41.2k) or Windows is on a non-100% display scale.
+$hud.AutoSize = $true
+$hud.AutoSizeMode = 'GrowAndShrink'
 $hudLabel = New-Object System.Windows.Forms.Label
-$hudLabel.Dock = 'Fill'
-$hudLabel.Padding = New-Object System.Windows.Forms.Padding 8
+$hudLabel.AutoSize = $true
+$hudLabel.Padding = New-Object System.Windows.Forms.Padding 10
 $hudLabel.Font = New-Object System.Drawing.Font 'Consolas', 9
 $hud.Controls.Add($hudLabel)
 
@@ -77,9 +80,17 @@ foreach ($c in @($hud, $hudLabel)) {
     $c.Add_MouseDown($down); $c.Add_MouseMove($move); $c.Add_MouseUp($up)
 }
 $PosFile = Join-Path $PSScriptRoot 'hud-pos.txt'
+$SetFile = Join-Path $PSScriptRoot 'settings.json'
+$LnkPath = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\claude-tray.lnk'
+
+function Save-Settings {
+    @{ ShowHud = $hud.Visible; IntervalMs = $script:timer.Interval } |
+        ConvertTo-Json | Set-Content $script:SetFile -Encoding utf8
+}
 
 function Show-Hud {
-    # Restore last position; fall back to top-right of the non-primary screen.
+    $hud.Show()   # show first so AutoSize has laid the label out and Width/Height are real
+
     $pos = if (Test-Path $script:PosFile) { (Get-Content $script:PosFile) -split ',' } else { $null }
     if ($pos.Count -eq 2) {
         $hud.Location = New-Object System.Drawing.Point ([int]$pos[0]), ([int]$pos[1])
@@ -87,7 +98,15 @@ function Show-Hud {
         $s = [System.Windows.Forms.Screen]::PrimaryScreen
         $hud.Location = New-Object System.Drawing.Point ($s.WorkingArea.Right - $hud.Width - 20), ($s.WorkingArea.Top + 20)
     }
-    $hud.Show(); $hud.BringToFront()
+
+    # Clamp fully on-screen: a saved position can be off the edge, or on a monitor
+    # that's since been unplugged or resized.
+    $wa = [System.Windows.Forms.Screen]::FromPoint($hud.Location).WorkingArea
+    $x = [Math]::Min([Math]::Max($hud.Left, $wa.Left), $wa.Right - $hud.Width)
+    $y = [Math]::Min([Math]::Max($hud.Top, $wa.Top), $wa.Bottom - $hud.Height)
+    $hud.Location = New-Object System.Drawing.Point $x, $y
+
+    $hud.BringToFront()
 }
 
 function Refresh {
@@ -124,20 +143,65 @@ function Refresh {
         $ts.Msgs, (Fmt $ts.In), (Fmt $ts.Out), (Fmt $ts.Cache), $ws.Msgs, (Fmt $ws.Out)
 
     $r = $menu.Items.Add('Refresh now'); $r.Add_Click({ Refresh })
-    $h = $menu.Items.Add('Show floating window')
-    $h.Add_Click({ if ($hud.Visible) { $hud.Hide() } else { Show-Hud } })
+
+    # Settings submenu: everything configurable lives here rather than loose in
+    # the main menu.
+    $set = New-Object System.Windows.Forms.ToolStripMenuItem 'Settings'
+    $menu.Items.Add($set) | Out-Null
+
+    $mi = { param($text, $checked, $onClick)
+            $i = New-Object System.Windows.Forms.ToolStripMenuItem $text
+            $i.Checked = $checked; $i.CheckOnClick = $false
+            $i.Add_Click($onClick); $set.DropDownItems.Add($i) | Out-Null; $i }
+
+    & $mi 'Show floating window' $hud.Visible {
+        if ($hud.Visible) { $hud.Hide() } else { Show-Hud }
+        Save-Settings
+    }
+    & $mi 'Start with Windows' (Test-Path $script:LnkPath) {
+        if (Test-Path $script:LnkPath) { Remove-Item $script:LnkPath -Force }
+        else {
+            $s = (New-Object -ComObject WScript.Shell).CreateShortcut($script:LnkPath)
+            $s.TargetPath = 'powershell.exe'
+            $s.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+            $s.WorkingDirectory = $PSScriptRoot; $s.WindowStyle = 7; $s.Save()
+        }
+    }
+
+    $set.DropDownItems.Add('-') | Out-Null
+    $iv = New-Object System.Windows.Forms.ToolStripMenuItem 'Refresh every'
+    $set.DropDownItems.Add($iv) | Out-Null
+    foreach ($opt in @(@{n='30 seconds';ms=30000}, @{n='1 minute';ms=60000},
+                       @{n='5 minutes';ms=300000}, @{n='15 minutes';ms=900000})) {
+        $it = New-Object System.Windows.Forms.ToolStripMenuItem $opt.n
+        $it.Checked = ($script:timer.Interval -eq $opt.ms)
+        $it.Tag = $opt.ms
+        $it.Add_Click({ $script:timer.Interval = [int]$this.Tag; Save-Settings; Refresh })
+        $iv.DropDownItems.Add($it) | Out-Null
+    }
+
+    $set.DropDownItems.Add('-') | Out-Null
+    $rp = $set.DropDownItems.Add('Reset window position')
+    $rp.Add_Click({
+        Remove-Item $script:PosFile -ErrorAction SilentlyContinue
+        $hud.Hide(); Show-Hud
+    })
+
     $q = $menu.Items.Add('Exit'); $q.Add_Click({
         $script:timer.Stop(); $hud.Close(); $icon.Visible = $false; $icon.Dispose()
         [System.Windows.Forms.Application]::Exit()
     })
 }
 
+$cfg = if (Test-Path $SetFile) { try { Get-Content $SetFile -Raw | ConvertFrom-Json } catch { $null } } else { $null }
+
 $timer = New-Object System.Windows.Forms.Timer
-$timer.Interval = 60000
+$timer.Interval = if ($cfg.IntervalMs) { [int]$cfg.IntervalMs } else { 60000 }
 $timer.Add_Tick({ Refresh })
 $timer.Start()
 
 $icon.Add_MouseDoubleClick({ Refresh })
 Refresh
-Show-Hud
+# Respect the saved choice; first run (no settings file) shows it.
+if ($null -eq $cfg -or $cfg.ShowHud) { Show-Hud }
 [System.Windows.Forms.Application]::Run()

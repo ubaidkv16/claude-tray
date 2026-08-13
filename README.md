@@ -65,9 +65,21 @@ There is nothing compiled — copying the folder by hand works just as well.
 
 ### 2. Install
 
+**Just double-click `Install - Start With Windows.cmd`.**
+
+That's the whole install. It registers the app to launch hidden on every login
+and starts it immediately.
+
+Prefer a terminal? Same thing:
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
+
+> **Why the `.cmd` files?** Windows opens `.ps1` files in Notepad when you
+> double-click them instead of running them. The `.cmd` wrappers are just
+> double-clickable entry points to the same scripts — you never need to touch a
+> terminal to use this app.
 
 This creates a shortcut in your Startup folder so it launches hidden on every
 login, then starts it immediately. It resolves its own location via
@@ -78,11 +90,16 @@ primary screen.
 
 ### Run once, without installing
 
+Double-click **`Start Claude Tray.cmd`**. It runs the app without registering
+anything for startup. Or from a terminal:
+
 ```powershell
 powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File claude-tray.ps1
 ```
 
 ### Uninstall
+
+Double-click **`Uninstall.cmd`**, or:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall
@@ -104,9 +121,24 @@ Nothing is written to the registry, and nothing is installed system-wide.
 | Right-click tray icon | Full menu: per-model today, 7-day totals, actions |
 | Double-click tray icon | Refresh immediately |
 | Menu → **Refresh now** | Same, from the menu |
-| Menu → **Show floating window** | Toggle the always-on-top box |
+| Menu → **Settings** | Options submenu — see below |
 | Drag the floating box | Move to any monitor; position is remembered |
 | Menu → **Exit** | Quit. Returns at next login, or relaunch by hand |
+
+### Settings
+
+Right-click the tray icon → **Settings**:
+
+| Setting | Does |
+|---|---|
+| **Show floating window** | Toggles the always-on-top box. Ticked when visible |
+| **Start with Windows** | Adds/removes the startup shortcut. Ticked when enabled |
+| **Refresh every** | 30 seconds, 1 minute, 5 minutes, or 15 minutes |
+| **Reset window position** | Puts the floating box back at the primary screen's top-right, for when it's ended up somewhere awkward |
+
+Your choices are saved to `settings.json` beside the script and restored on the
+next launch — including whether the floating window should appear at all, so if
+you turn it off it stays off.
 
 The floating box is borderless — there's no title bar, so drag it from anywhere
 on its body. Its position is saved to `hud-pos.txt` next to the script and
@@ -122,6 +154,7 @@ Right-click the tray icon → **Show floating window**. It's a toggle.
 
 **You chose Exit, or killed the process.** Any of these bring it back:
 
+- **Double-click `Start Claude Tray.cmd`** in the folder — the easy one.
 - **Start menu** — press <kbd>Win</kbd>, type `claude tray`, press Enter.
   (Right-click it there to pin it to Start or the taskbar.)
 - **Startup folder** — press <kbd>Win</kbd>+<kbd>R</kbd>, enter `shell:startup`,
@@ -201,16 +234,18 @@ Your prompts and Claude's replies are never read, parsed, logged, or transmitted
 
 ## Configuration
 
-There's no config file — it's a short script, so edit it directly. The knobs
-worth knowing, all near the top of `claude-tray.ps1`:
+Most things you'd want to change are in the [Settings menu](#settings). For the
+rest, edit `claude-tray.ps1` directly — it's a short script:
 
 | What | Where | Default |
 |---|---|---|
 | Transcript location | `$Root` | `%USERPROFILE%\.claude\projects` |
-| Refresh interval | `$timer.Interval` | `60000` (ms) |
-| Window size | `$hud.Size` | `260, 92` |
 | Window transparency | `$hud.Opacity` | `0.9` |
 | Window colours | `$hud.BackColor` / `.ForeColor` | dark grey / light grey |
+| Window font | `$hudLabel.Font` | Consolas 9 |
+
+The floating window sizes itself to its contents, so there's no width or height
+to set — change the font and it adjusts.
 
 ## Not included, on purpose
 
@@ -225,10 +260,14 @@ worth knowing, all near the top of `claude-tray.ps1`:
 
 | File | Purpose |
 |---|---|
+| **`Start Claude Tray.cmd`** | **Double-click to run it** |
+| **`Install - Start With Windows.cmd`** | **Double-click to install for every login** |
+| **`Uninstall.cmd`** | **Double-click to remove it** |
 | `claude-tray.ps1` | The entire application |
-| `install.ps1` | Startup-shortcut installer / uninstaller |
+| `install.ps1` | The installer the `.cmd` wrappers call |
 | `test-usage.ps1` | Self-check for the parsing logic |
 | `hud-pos.txt` | *Generated* — saved window position (gitignored) |
+| `settings.json` | *Generated* — your Settings choices (gitignored) |
 
 ## Tests
 
