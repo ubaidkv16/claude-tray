@@ -1,50 +1,82 @@
 # claude-tray
 
-A Windows system-tray readout of your Claude Code token usage. One PowerShell
-script, no dependencies, no build step, no install of anything.
+A Windows system-tray readout of your [Claude Code](https://claude.com/claude-code)
+token usage.
 
-It reads the JSONL transcripts Claude Code already writes to
-`%USERPROFILE%\.claude\projects\` and totals the token counts.
+One PowerShell script. No dependencies, no build step, no runtime to install, no
+admin rights, no network access. It reads the JSONL transcripts Claude Code
+already writes to disk and totals the tokens.
 
-- **Tray icon** — hover for today's totals; right-click for the full breakdown.
+```
+┌─ tray tooltip ─────────────────────────────────┐
+│ Claude today: 41.2k in / 18.9k out / 2.1M cache│
+└────────────────────────────────────────────────┘
+
+┌─ right-click menu ──────────────┐   ┌─ floating window ─────┐
+│ TODAY  147 msgs                 │   │ Claude Code usage     │
+│   in 41.2k  out 18.9k  cache 2.1M│  │                       │
+│   claude-opus-5: 131 msgs, 17.4k │  │ TODAY  147 msgs       │
+│   claude-haiku-4-5: 16 msgs, 1.5k│  │  in 41.2k  out 18.9k  │
+│ ───────────────────────────────  │  │  cache 2.1M           │
+│ LAST 7 DAYS  1,204 msgs          │  │ 7d  1204 msgs, 210k   │
+│   in 380k  out 210k  cache 24.8M │  └───────────────────────┘
+│ ───────────────────────────────  │
+│ Updated 14:32:08                 │
+│ Refresh now                      │
+│ Show floating window             │
+│ Exit                             │
+└──────────────────────────────────┘
+```
+
+## Features
+
+- **Tray icon** — hover for today's totals, right-click for the full breakdown.
+- **Per-model split** — Opus, Sonnet and Haiku counted separately.
+- **Today and last-7-days** views, with message counts.
 - **Floating window** — a small always-on-top box you can drag to any monitor,
-  because Windows 11 only puts the tray on the primary display's taskbar.
-- Refreshes every 60 seconds.
+  since Windows 11 confines the tray to the primary display.
+- **Auto-refresh** every 60 seconds, plus manual refresh.
+- **Accurate counting** — deduplicates the repeated entries transcripts contain
+  after a session resume (see [What it counts](#what-it-counts)).
 
 ## Requirements
 
-- Windows (10 or 11)
-- Windows PowerShell 5.1 — preinstalled on every Windows box; nothing to install
-- Claude Code, having run at least once (so there are transcripts to read)
+| | |
+|---|---|
+| OS | Windows 10 or 11 |
+| Shell | Windows PowerShell 5.1 — **preinstalled on every Windows machine** |
+| Other | Claude Code, having run at least once |
 
-No Python, no Node, no winget, no admin rights.
+Explicitly **not** required: Python, Node.js, winget, Visual C++ redistributables,
+admin rights, or an internet connection. If you have Windows, you can already run
+this.
 
 ## Install
 
-### Get the files
-
-Either clone it:
+### 1. Get the files
 
 ```powershell
-git clone <your-repo-url> claude-tray
+git clone https://github.com/<owner>/claude-tray.git
 cd claude-tray
 ```
 
-…or just copy the folder over. It's four files and none of them are compiled.
-`claude-tray.ps1` alone is enough to run — the rest is the installer, the test,
-and this README.
+No git? Download the ZIP from the repo's green **Code** button and extract it.
+There is nothing compiled — copying the folder by hand works just as well.
 
-### Run the installer
+### 2. Install
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-That creates a shortcut in your Startup folder so it launches hidden on every
-login, then starts it immediately. It uses whatever folder you put the repo in,
-so there are no paths to edit.
+This creates a shortcut in your Startup folder so it launches hidden on every
+login, then starts it immediately. It resolves its own location via
+`$PSScriptRoot`, so the repo can live anywhere and there are no paths to edit.
 
-### Or run it once, without installing
+You should see the tray icon appear, plus a readout box at the top-right of your
+primary screen.
+
+### Run once, without installing
 
 ```powershell
 powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File claude-tray.ps1
@@ -56,71 +88,109 @@ powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File claude-t
 powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall
 ```
 
-Removes the startup shortcut and stops the running copy. Nothing else is left
-behind except `hud-pos.txt` in the repo folder.
+Removes the startup shortcut and stops the running copy. The only leftover is
+`hud-pos.txt` in the repo folder; delete the folder and it's gone without trace.
+Nothing is written to the registry, and nothing is installed system-wide.
+
+> **About `-ExecutionPolicy Bypass`:** by default Windows blocks unsigned
+> scripts. This flag applies to that single invocation only — it does not change
+> any machine-wide setting or weaken your system's policy.
 
 ## Usage
 
-| Action | What it does |
+| Action | Result |
 |---|---|
-| Hover the tray icon | Today's in / out / cache tokens |
-| Right-click the tray icon | Today per-model with message counts, last-7-days totals |
-| Double-click the tray icon | Refresh now |
-| Menu → Show floating window | Toggle the always-on-top box |
-| Drag the floating box | Move it anywhere, any monitor — position is remembered |
-| Menu → Exit | Quit (won't come back until next login, or relaunch by hand) |
+| Hover tray icon | Today's in / out / cache tokens |
+| Right-click tray icon | Full menu: per-model today, 7-day totals, actions |
+| Double-click tray icon | Refresh immediately |
+| Menu → **Refresh now** | Same, from the menu |
+| Menu → **Show floating window** | Toggle the always-on-top box |
+| Drag the floating box | Move to any monitor; position is remembered |
+| Menu → **Exit** | Quit. Returns at next login, or relaunch by hand |
 
-The floating box is borderless, so there's no title bar — drag it from anywhere
-on its body. Its position saves to `hud-pos.txt` next to the script and is
-restored on the next launch. Delete that file to reset it to the primary
-screen's top-right corner.
+The floating box is borderless — there's no title bar, so drag it from anywhere
+on its body. Its position is saved to `hud-pos.txt` next to the script and
+restored on the next launch. Delete that file to reset it to the primary screen's
+top-right corner.
 
 ## Which monitor things appear on
 
-The **tray icon** can only ever live on your primary display. Windows 11 gives
-the notification area to the primary taskbar only; secondary taskbars get app
-buttons and a clock but no tray. No application can change this. If you want the
-icon on a different screen, make that screen primary in
-Settings → System → Display → *Make this my main display*.
+The **tray icon can only ever live on your primary display.** Windows 11 gives
+the notification area to the primary taskbar only — secondary taskbars get app
+buttons and a clock, but no tray. No application can change this. To move it,
+change which display is primary: Settings → System → Display →
+*Make this my main display*.
 
-The **floating window** has no such limit — that's what it's for. It opens on the
-primary screen by default; drag it wherever you like and it stays there.
+The **floating window has no such limit**, which is precisely why it exists. It
+opens on the primary screen and remembers wherever you drag it.
 
-## What it counts
+## How it works
 
-For each assistant message in the transcripts it sums:
+Claude Code writes a JSONL transcript per session under
+`%USERPROFILE%\.claude\projects\`. Every assistant message carries a `usage`
+object with its token counts. The script walks those files, sums the numbers, and
+renders them into a WinForms `NotifyIcon` — the same tray API any native Windows
+app uses, available from PowerShell because .NET ships with Windows.
+
+That's the entire design. There's no service, no database, no polling of any API,
+and no configuration file.
+
+### What it counts
+
+Per assistant message:
 
 - `input_tokens`
 - `output_tokens`
-- `cache_read_input_tokens` + `cache_creation_input_tokens`, shown together as
-  "cache"
+- `cache_read_input_tokens` + `cache_creation_input_tokens`, displayed together
+  as **cache**
 
-Two details that matter for accuracy:
+Two details that matter for correctness:
 
-- **Deduplication.** Transcripts replay earlier entries when you resume a
-  session, so the same message can appear several times. Entries are deduped by
-  `message.id`.
-- **Date filtering.** Both the file's modified time and each entry's own
-  `timestamp` are checked, so a long-running project file doesn't drag old usage
-  into today's number.
+- **Deduplication.** Transcripts replay earlier entries when a session resumes,
+  so one message can appear several times across files. Entries are deduped by
+  `message.id`, otherwise resumed sessions inflate every total.
+- **Two-stage date filtering.** Both the file's `LastWriteTime` *and* each
+  entry's own `timestamp` are checked. Filtering only by file time would drag
+  months of old usage into "today" for any long-lived project.
 
-Totals are grouped per model, so Opus and Haiku usage are listed separately.
+Totals are grouped by model, so a cheap Haiku call isn't averaged in with Opus.
 
-## Not included
+### Privacy
 
-- **Dollar costs.** That needs a hardcoded price table, which goes stale the
-  moment pricing changes. Deliberately left out.
-- **Rate-limit / quota status.** Not present in the transcripts; it would need
-  an API call.
+Everything is local. The script makes no network calls of any kind — it only
+reads files already on your disk, and only the `usage` and `timestamp` fields.
+Your prompts and Claude's replies are never read, parsed, logged, or transmitted.
+
+## Configuration
+
+There's no config file — it's a short script, so edit it directly. The knobs
+worth knowing, all near the top of `claude-tray.ps1`:
+
+| What | Where | Default |
+|---|---|---|
+| Transcript location | `$Root` | `%USERPROFILE%\.claude\projects` |
+| Refresh interval | `$timer.Interval` | `60000` (ms) |
+| Window size | `$hud.Size` | `260, 92` |
+| Window transparency | `$hud.Opacity` | `0.9` |
+| Window colours | `$hud.BackColor` / `.ForeColor` | dark grey / light grey |
+
+## Not included, on purpose
+
+- **Dollar cost estimates.** These need a hardcoded price table that goes stale
+  the moment pricing changes, and silently-wrong money figures are worse than
+  none. Token counts are exact; costs would be a guess.
+- **Rate-limit / quota status.** Not present in the transcripts. It would require
+  an authenticated API call, which would mean handling credentials — a large
+  jump in scope for a tray widget.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `claude-tray.ps1` | The whole app |
+| `claude-tray.ps1` | The entire application |
 | `install.ps1` | Startup-shortcut installer / uninstaller |
 | `test-usage.ps1` | Self-check for the parsing logic |
-| `hud-pos.txt` | Generated — saved window position |
+| `hud-pos.txt` | *Generated* — saved window position (gitignored) |
 
 ## Tests
 
@@ -128,15 +198,24 @@ Totals are grouped per model, so Opus and Haiku usage are listed separately.
 powershell -NoProfile -File test-usage.ps1
 ```
 
-Builds throwaway JSONL fixtures and asserts the parsing: dedupe by `message.id`,
-the date cutoff, per-model splitting, and number formatting. Prints `OK`, or
-throws on the first failure. It doesn't touch your real transcripts.
+Builds throwaway JSONL fixtures in `%TEMP%` and asserts the parsing behaviour:
+dedupe by `message.id`, the date cutoff, per-model splitting, and number
+formatting. Prints `OK`, or throws on the first failed assertion. It never reads
+or modifies your real transcripts.
+
+No test framework — it's plain `throw` on a bad value, so it runs anywhere
+PowerShell does.
 
 ## Troubleshooting
 
-**Nothing in the tray.** Windows may have hidden it in the overflow area — click
-the `^` chevron on the taskbar, or check Settings → Personalization → Taskbar →
-*Other system tray icons*. Confirm it's actually running with:
+<details>
+<summary><b>No icon in the tray</b></summary>
+
+Windows often hides new tray icons in the overflow area. Click the `^` chevron on
+the taskbar, or pin it permanently via Settings → Personalization → Taskbar →
+*Other system tray icons*.
+
+To confirm it's actually running:
 
 ```powershell
 Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
@@ -144,23 +223,56 @@ Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
   Select-Object ProcessId, CreationDate
 ```
 
-Note the `$PID` exclusion — without it the query matches its own command line and
-reports a process that isn't the app.
+The `$PID` exclusion matters: without it, the query matches *its own* command
+line and cheerfully reports a running app that doesn't exist.
+</details>
 
-**To see startup errors,** run it in a visible window and drop `-WindowStyle
-Hidden`:
+<details>
+<summary><b>It won't start, and I can't see why</b></summary>
+
+Run it in a visible window so errors are readable — drop `-WindowStyle Hidden`:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File claude-tray.ps1
 ```
+</details>
 
-**All zeros.** Check that `%USERPROFILE%\.claude\projects` exists and holds
-`.jsonl` files. If Claude Code stores its data elsewhere on that machine, edit
-the `$Root` line at the top of `claude-tray.ps1`.
+<details>
+<summary><b>All the numbers are zero</b></summary>
 
-**"Running scripts is disabled on this system."** That's PowerShell's execution
-policy. The `-ExecutionPolicy Bypass` flag in the commands above handles it per
-run without changing any machine-wide setting.
+Check that `%USERPROFILE%\.claude\projects` exists and contains `.jsonl` files:
 
-**The floating window is in the way.** Drag it, or toggle it off from the tray
-menu — the tray icon keeps working without it.
+```powershell
+Get-ChildItem "$env:USERPROFILE\.claude\projects" -Recurse -Filter *.jsonl | Measure-Object
+```
+
+If it's empty, Claude Code hasn't run on this machine yet. If your transcripts
+live somewhere else, edit `$Root` at the top of `claude-tray.ps1`.
+</details>
+
+<details>
+<summary><b>"Running scripts is disabled on this system"</b></summary>
+
+PowerShell's execution policy. Use the `-ExecutionPolicy Bypass` flag shown in
+every command above; it's per-invocation and changes nothing permanently.
+</details>
+
+<details>
+<summary><b>The floating window is in the way</b></summary>
+
+Drag it elsewhere, or toggle it off from the tray menu — the tray icon works
+perfectly well without it. To stop it appearing at startup, remove the
+`Show-Hud` line near the bottom of `claude-tray.ps1`.
+</details>
+
+<details>
+<summary><b>It's slow with a lot of history</b></summary>
+
+Every refresh rescans the transcripts, filtered by file modification time first.
+With a very large `~/.claude/projects` the 7-day query can take a moment. Raise
+`$timer.Interval` if you notice it.
+</details>
+
+## License
+
+MIT — see [LICENSE](LICENSE).
