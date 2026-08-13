@@ -116,7 +116,7 @@ Nothing is written to the registry, and nothing is installed system-wide.
 |---|---|
 | Hover tray icon | Today's in / out / cache tokens |
 | Right-click tray icon | Full menu: per-model today, 7-day totals, actions |
-| Double-click tray icon | Refresh immediately |
+| Double-click tray icon | Show / hide the floating window |
 | Menu → **Refresh now** | Same, from the menu |
 | Menu → **Settings** | Options submenu — see below |
 | Drag the floating box | Move to any monitor; position is remembered |
@@ -178,8 +178,9 @@ $s.WindowStyle = 7
 $s.Save()
 ```
 
-Nothing prevents launching it twice, which gives you two identical tray icons.
-Harmless — just pick one and hit **Exit**.
+Launching it again when it's already running is safe — a single-instance lock
+means the second copy exits immediately rather than adding a duplicate tray icon.
+You will only ever have one.
 
 ## Which monitor things appear on
 

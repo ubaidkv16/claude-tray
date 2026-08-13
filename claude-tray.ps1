@@ -3,6 +3,12 @@
 # transcripts under ~/.claude/projects.
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 
+# One instance only. Launching again (double-click, login, Start menu) otherwise
+# stacks up duplicate tray icons all showing the same numbers.
+$createdNew = $false
+$mutex = New-Object System.Threading.Mutex($true, 'Local\claude-tray-single-instance', [ref]$createdNew)
+if (-not $createdNew) { exit }
+
 $Root = Join-Path $env:USERPROFILE '.claude\projects'
 
 function Get-Usage {
@@ -200,7 +206,11 @@ $timer.Interval = if ($cfg.IntervalMs) { [int]$cfg.IntervalMs } else { 60000 }
 $timer.Add_Tick({ Refresh })
 $timer.Start()
 
-$icon.Add_MouseDoubleClick({ Refresh })
+# Double-click toggles the floating window: the one icon controls everything.
+$icon.Add_MouseDoubleClick({
+    if ($hud.Visible) { $hud.Hide() } else { Show-Hud }
+    Save-Settings
+})
 Refresh
 # Respect the saved choice; first run (no settings file) shows it.
 if ($null -eq $cfg -or $cfg.ShowHud) { Show-Hud }
