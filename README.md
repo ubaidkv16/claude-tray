@@ -23,7 +23,7 @@ already writes to disk and totals the tokens.
 │ ───────────────────────────────  │
 │ Updated 14:32:08                 │
 │ Refresh now                      │
-│ Show floating window             │
+│ Settings                       ▸ │
 │ Exit                             │
 └──────────────────────────────────┘
 ```
@@ -56,7 +56,7 @@ this.
 ### 1. Get the files
 
 ```powershell
-git clone https://github.com/<owner>/claude-tray.git
+git clone https://github.com/ubaidkv16/claude-tray.git
 cd claude-tray
 ```
 
@@ -81,12 +81,9 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 > double-clickable entry points to the same scripts — you never need to touch a
 > terminal to use this app.
 
-This creates a shortcut in your Startup folder so it launches hidden on every
-login, then starts it immediately. It resolves its own location via
-`$PSScriptRoot`, so the repo can live anywhere and there are no paths to edit.
-
-You should see the tray icon appear, plus a readout box at the top-right of your
-primary screen.
+Everything resolves its own location, so the repo can live anywhere and there are
+no paths to edit. You should see the tray icon appear, plus a readout box at the
+top-right of your primary screen.
 
 ### Run once, without installing
 
