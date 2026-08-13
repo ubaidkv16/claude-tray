@@ -1,7 +1,9 @@
 # Self-check: dedupe by message id, date filter, per-model split, Fmt.
 $src = Get-Content "$PSScriptRoot\claude-tray.ps1" -Raw
 # Grab just the two pure functions, skip the WinForms UI.
-$funcs = [regex]::Match($src, '(?s)function Get-Usage.*?\n\}\n\nfunction Fmt.*?\n\}\n').Value
+# \r?\n throughout: the working copy may be checked out with either line ending.
+$funcs = [regex]::Match($src, '(?s)function Get-Usage.*?\r?\n\}\r?\n\r?\nfunction Fmt.*?\r?\n\}\r?\n').Value
+if (-not $funcs) { throw 'could not extract functions from claude-tray.ps1 - has it been restructured?' }
 Add-Type -AssemblyName System.Windows.Forms  # Get-Usage body has no UI, but keep parity
 Invoke-Expression $funcs
 
