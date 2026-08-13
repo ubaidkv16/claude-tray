@@ -53,66 +53,12 @@ $icon.Visible = $true
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
 $icon.ContextMenuStrip = $menu
 
-# Windows 11 puts the tray on the primary display's taskbar only, so offer a
-# draggable topmost readout for whichever monitor you actually want it on.
-$hud = New-Object System.Windows.Forms.Form
-$hud.FormBorderStyle = 'None'
-$hud.TopMost = $true
-$hud.ShowInTaskbar = $false
-$hud.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
-$hud.ForeColor = [System.Drawing.Color]::Gainsboro
-$hud.StartPosition = 'Manual'
-$hud.Opacity = 0.9
-# Grow to fit the text instead of a fixed size, so nothing gets clipped when the
-# numbers get longer (1.2M vs 41.2k) or Windows is on a non-100% display scale.
-$hud.AutoSize = $true
-$hud.AutoSizeMode = 'GrowAndShrink'
-$hudLabel = New-Object System.Windows.Forms.Label
-$hudLabel.AutoSize = $true
-$hudLabel.Padding = New-Object System.Windows.Forms.Padding 10
-$hudLabel.Font = New-Object System.Drawing.Font 'Consolas', 9
-$hud.Controls.Add($hudLabel)
-
-# Borderless form has no title bar to grab, so drag from anywhere on it.
-$drag = @{ on = $false; x = 0; y = 0 }
-$down = { $drag.on = $true; $drag.x = [System.Windows.Forms.Cursor]::Position.X - $hud.Left
-                            $drag.y = [System.Windows.Forms.Cursor]::Position.Y - $hud.Top }
-$move = { if ($drag.on) {
-            $p = [System.Windows.Forms.Cursor]::Position
-            $hud.Left = $p.X - $drag.x; $hud.Top = $p.Y - $drag.y } }
-$up   = { $drag.on = $false
-          Set-Content $script:PosFile "$($hud.Left),$($hud.Top)" -ErrorAction SilentlyContinue }
-foreach ($c in @($hud, $hudLabel)) {
-    $c.Add_MouseDown($down); $c.Add_MouseMove($move); $c.Add_MouseUp($up)
-}
-$PosFile = Join-Path $PSScriptRoot 'hud-pos.txt'
 $SetFile = Join-Path $PSScriptRoot 'settings.json'
 $LnkPath = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\claude-tray.lnk'
 
 function Save-Settings {
-    @{ ShowHud = $hud.Visible; IntervalMs = $script:timer.Interval } |
+    @{ IntervalMs = $script:timer.Interval } |
         ConvertTo-Json | Set-Content $script:SetFile -Encoding utf8
-}
-
-function Show-Hud {
-    $hud.Show()   # show first so AutoSize has laid the label out and Width/Height are real
-
-    $pos = if (Test-Path $script:PosFile) { (Get-Content $script:PosFile) -split ',' } else { $null }
-    if ($pos.Count -eq 2) {
-        $hud.Location = New-Object System.Drawing.Point ([int]$pos[0]), ([int]$pos[1])
-    } else {
-        $s = [System.Windows.Forms.Screen]::PrimaryScreen
-        $hud.Location = New-Object System.Drawing.Point ($s.WorkingArea.Right - $hud.Width - 20), ($s.WorkingArea.Top + 20)
-    }
-
-    # Clamp fully on-screen: a saved position can be off the edge, or on a monitor
-    # that's since been unplugged or resized.
-    $wa = [System.Windows.Forms.Screen]::FromPoint($hud.Location).WorkingArea
-    $x = [Math]::Min([Math]::Max($hud.Left, $wa.Left), $wa.Right - $hud.Width)
-    $y = [Math]::Min([Math]::Max($hud.Top, $wa.Top), $wa.Bottom - $hud.Height)
-    $hud.Location = New-Object System.Drawing.Point $x, $y
-
-    $hud.BringToFront()
 }
 
 function Refresh {
@@ -145,9 +91,6 @@ function Refresh {
     $menu.Items.Add('-') | Out-Null
     & $add ("Updated {0}" -f (Get-Date -f 'HH:mm:ss'))
 
-    $hudLabel.Text = "Claude Code usage`n`nTODAY  {0} msgs`n in {1}  out {2}`n cache {3}`n7d  {4} msgs, {5} out" -f `
-        $ts.Msgs, (Fmt $ts.In), (Fmt $ts.Out), (Fmt $ts.Cache), $ws.Msgs, (Fmt $ws.Out)
-
     $r = $menu.Items.Add('Refresh now'); $r.Add_Click({ Refresh })
 
     # Settings submenu: everything configurable lives here rather than loose in
@@ -160,10 +103,6 @@ function Refresh {
             $i.Checked = $checked; $i.CheckOnClick = $false
             $i.Add_Click($onClick); $set.DropDownItems.Add($i) | Out-Null; $i }
 
-    & $mi 'Show floating window' $hud.Visible {
-        if ($hud.Visible) { $hud.Hide() } else { Show-Hud }
-        Save-Settings
-    }
     & $mi 'Start with Windows' (Test-Path $script:LnkPath) {
         if (Test-Path $script:LnkPath) { Remove-Item $script:LnkPath -Force }
         else {
@@ -186,15 +125,8 @@ function Refresh {
         $iv.DropDownItems.Add($it) | Out-Null
     }
 
-    $set.DropDownItems.Add('-') | Out-Null
-    $rp = $set.DropDownItems.Add('Reset window position')
-    $rp.Add_Click({
-        Remove-Item $script:PosFile -ErrorAction SilentlyContinue
-        $hud.Hide(); Show-Hud
-    })
-
     $q = $menu.Items.Add('Exit'); $q.Add_Click({
-        $script:timer.Stop(); $hud.Close(); $icon.Visible = $false; $icon.Dispose()
+        $script:timer.Stop(); $icon.Visible = $false; $icon.Dispose()
         [System.Windows.Forms.Application]::Exit()
     })
 }
@@ -206,12 +138,6 @@ $timer.Interval = if ($cfg.IntervalMs) { [int]$cfg.IntervalMs } else { 60000 }
 $timer.Add_Tick({ Refresh })
 $timer.Start()
 
-# Double-click toggles the floating window: the one icon controls everything.
-$icon.Add_MouseDoubleClick({
-    if ($hud.Visible) { $hud.Hide() } else { Show-Hud }
-    Save-Settings
-})
+$icon.Add_MouseDoubleClick({ Refresh })
 Refresh
-# Respect the saved choice; first run (no settings file) shows it.
-if ($null -eq $cfg -or $cfg.ShowHud) { Show-Hud }
 [System.Windows.Forms.Application]::Run()
