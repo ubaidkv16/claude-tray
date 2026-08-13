@@ -113,6 +113,44 @@ on its body. Its position is saved to `hud-pos.txt` next to the script and
 restored on the next launch. Delete that file to reset it to the primary screen's
 top-right corner.
 
+## Reopening it after you close it
+
+Depends on which thing you closed.
+
+**You closed the floating box, but the tray icon is still there.**
+Right-click the tray icon → **Show floating window**. It's a toggle.
+
+**You chose Exit, or killed the process.** Any of these bring it back:
+
+- **Start menu** — press <kbd>Win</kbd>, type `claude tray`, press Enter.
+  (Right-click it there to pin it to Start or the taskbar.)
+- **Startup folder** — press <kbd>Win</kbd>+<kbd>R</kbd>, enter `shell:startup`,
+  and double-click **claude-tray**.
+- **Command line:**
+
+  ```powershell
+  powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File claude-tray.ps1
+  ```
+
+- **Do nothing** — it starts again by itself at your next login, which is what
+  the startup shortcut installed by `install.ps1` is for.
+
+Note that `install.ps1` creates the Startup entry. If you want the Start-menu
+entry as well:
+
+```powershell
+$s = (New-Object -ComObject WScript.Shell).CreateShortcut(
+       "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Claude Tray.lnk")
+$s.TargetPath = 'powershell.exe'
+$s.Arguments  = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$PWD\claude-tray.ps1`""
+$s.WorkingDirectory = "$PWD"
+$s.WindowStyle = 7
+$s.Save()
+```
+
+Nothing prevents launching it twice, which gives you two identical tray icons.
+Harmless — just pick one and hit **Exit**.
+
 ## Which monitor things appear on
 
 The **tray icon can only ever live on your primary display.** Windows 11 gives
